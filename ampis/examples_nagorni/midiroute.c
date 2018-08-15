@@ -1,9 +1,19 @@
 /* midiroute.c by Matthias Nagorni */
 
-#include "midi1.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <alsa/asoundlib.h>
 
-int open_seq(snd_seq_t **seq_handle, int in_ports[], int out_ports[], int num_in, int num_out)
-{
+#define MAX_MIDI_PORTS   4
+
+int open_seq(snd_seq_t **seq_handle, int in_ports[], int out_ports[], int num_in, int num_out);
+void midi_route(snd_seq_t *seq_handle, int out_ports[], int split_point);
+
+/* Open ALSA sequencer wit num_in writeable ports and num_out readable ports. */
+/* The sequencer handle and the port IDs are returned.                        */  
+int open_seq(snd_seq_t **seq_handle, int in_ports[], int out_ports[], int num_in, int num_out) {
+
   int l1;
   char portname[64];
 
@@ -33,6 +43,10 @@ int open_seq(snd_seq_t **seq_handle, int in_ports[], int out_ports[], int num_in
   return(0);
 }
 
+/* Read events from writeable port and route them to readable port 0  */
+/* if NOTEON / OFF event with note < split_point. NOTEON / OFF events */
+/* with note >= split_point are routed to readable port 1. All other  */
+/* events are routed to both readable ports.                          */
 void midi_route(snd_seq_t *seq_handle, int out_ports[], int split_point) {
 
   snd_seq_event_t *ev;

@@ -1,6 +1,12 @@
 /* seqdemo.c by Matthias Nagorni */
 
-#include "midi0.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <alsa/asoundlib.h>
+
+snd_seq_t *open_seq();
+void midi_action(snd_seq_t *seq_handle);
 
 snd_seq_t *open_seq() {
 
@@ -18,7 +24,6 @@ snd_seq_t *open_seq() {
     fprintf(stderr, "Error creating sequencer port.\n");
     exit(1);
   }
-  printf("PORT = %d\n", portid);
   return(seq_handle);
 }
 
@@ -54,20 +59,15 @@ int main(int argc, char *argv[]) {
 
   snd_seq_t *seq_handle;
   int npfd;
-  int e;
   struct pollfd *pfd;
     
   seq_handle = open_seq();
   npfd = snd_seq_poll_descriptors_count(seq_handle, POLLIN);
-  printf("Num Polling FD = %d\n", npfd);
   pfd = (struct pollfd *)alloca(npfd * sizeof(struct pollfd));
-  e = snd_seq_poll_descriptors(seq_handle, pfd, npfd, POLLIN);
-  printf("E = %d\n", e);
-
+  snd_seq_poll_descriptors(seq_handle, pfd, npfd, POLLIN);
   while (1) {
-    e = poll(pfd, npfd, 100000);
-    if (e > 0) {
+    if (poll(pfd, npfd, 100000) > 0) {
       midi_action(seq_handle);
-    } else printf("E = %d\n", e);
+    }  
   }
 }
