@@ -81,6 +81,7 @@ void echomidi(snd_rawmidi_t* midiin, snd_rawmidi_t* midiout) {
 
       if ((argsLeft == 0) && (((buffer[0] & 0xf0) == 0x90) ||
             ((buffer[0] & 0xf0) == 0x80))) {
+         printf("old note: %d\n", buffer[1]);
          newnote = buffer[1] + transpose;
          if ((newnote > 0) && (newnote < 128)) {
             buffer[1] = (unsigned char)newnote;
