@@ -1,6 +1,7 @@
 CC=gcc
-CFLAGS=-Wall -g -DEBUG_ENABLE=1
-OBJ=main.c helper.c
+CFLAGS=-Wall -g
+LDFLAGS=-lasound
+OBJ=midi0.c midi0.h
 BIN=ampiseq
 
 all: $(BIN)
@@ -9,7 +10,7 @@ all: $(BIN)
 	$(CC) $< $(CFLAGS) -o $@
 
 $(BIN): $(OBJ)
-	$(CC) $< $(CFLAGS) -o $@
+	$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
 
 clean:
 	rm $(BIN)
