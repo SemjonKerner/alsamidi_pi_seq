@@ -76,7 +76,6 @@ int main(int argc, char *argv[]) {
    int count = 0;         // Current count of bytes received.
    char buffer[1];        // Storage for input buffer received
    while (count < maxcount) {
-      printf("\n%d:", count);
       if ((status = snd_rawmidi_read(midiin, buffer, 1)) < 0) {
          errormessage("Problem reading MIDI input: %s", snd_strerror(status));
       }
