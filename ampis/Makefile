@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -g
 LDFLAGS=-lasound
-OBJ=midiecho.c
+OBJ=midithru.c
 BIN=ampiseq
 
 all: $(BIN)
