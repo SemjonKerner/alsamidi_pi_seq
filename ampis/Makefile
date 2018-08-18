@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -g
-LDFLAGS=-lasound
+LDFLAGS=-lasound -pthread
 OBJ=midithru.c
 BIN=ampiseq
 
