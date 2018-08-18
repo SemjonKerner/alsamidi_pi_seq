@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=-Wall -g
 LDFLAGS=-lasound -pthread
-OBJ=midithru.c
-BIN=ampiseq
+OBJ=ampis.c helper.c
+BIN=ampis
 
 all: $(BIN)
 
@@ -10,7 +10,7 @@ all: $(BIN)
 	$(CC) $< $(CFLAGS) -o $@
 
 $(BIN): $(OBJ)
-	$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
+	$(CC) $(OBJ) $(CFLAGS) $(LDFLAGS) -o $@
 
 clean:
 	rm $(BIN)
