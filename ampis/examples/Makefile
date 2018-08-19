@@ -19,7 +19,10 @@ midiinthread: midiinthread.c
 nonblockinginput: nonblockinginput.c
 	$(CC) $< $(CFLAGS) -o $@
 
-all: alsarawmidiin alsarawmidiout alsarawportlist midiecho midiinthread	nonblockinginput
+clk: clk.c
+	$(CC) $< $(CFLAGS) -o $@
+
+all: alsarawmidiin alsarawmidiout alsarawportlist midiecho midiinthread	nonblockinginput clk
 
 clean:
 	-rm alsarawmidiin
@@ -28,9 +31,4 @@ clean:
 	-rm midiecho
 	-rm midiinthread
 	-rm nonblockinginput
-	-rm alsarawmidiin.o
-	-rm alsarawmidiout.o
-	-rm alsarawportlist.o
-	-rm midiecho.o
-	-rm midiinthread.o
-	-rm nonblockinginput.o
+	-rm clk
