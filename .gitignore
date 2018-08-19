@@ -1,5 +1,12 @@
 ampiseq/ampiseq
 
+# all
+*
+# unignore with extensions
+!*.*
+# unignore dirs
+!*/
+
 # Object files
 *.o
 *.ko

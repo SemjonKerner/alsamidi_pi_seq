@@ -1,5 +1,7 @@
 #include "ampis.h"
 
+// ++ HELPER ++
+
 void check_port(int *p)
 {
     int card = -1;
@@ -39,5 +41,68 @@ void setbpm (int bpm)
 {
     sleeptime = (int)(2500000 / bpm);
     DEBUG("BPM = %f, sleeping = %d\n",
-                    (double)(2500000 / sleeptime), sleeptime);
+    (double)(2500000 / sleeptime), sleeptime);
 }
+
+// ++ RECORDER ++
+
+step_link_t* record_link(char midi[3], step_link_t* act,
+                         step_link_t* last)
+{
+    struct timespec time;
+    step_link_t* next;
+
+    clock_gettime(CLOCK_REALTIME, &time);
+
+    next = (step_link_t *)malloc(sizeof(step_link_t));
+    next->prev = act;
+    next->next = NULL;
+
+    next->t = time;
+    memcpy(next->midi, midi, 3);
+
+    act->next = next;
+    act = next;
+    last = next;
+
+    return act;
+}
+
+void free_link(step_link_t* start)
+{
+    step_link_t *act, *next;
+    act = start;
+
+    while(1) {
+        DEBUG("%lf: 0x%c, %c, %c\n",
+        (double)act->t.tv_sec +
+        (double)act->t.tv_nsec / 1000000000,
+        act->midi[0], act->midi[1], act->midi[2]);
+
+        next = act->next;
+        free(act);
+        act = next;
+        if (act == NULL) break;
+    }
+}
+
+void init_recorder(ampis_recorder_t* r)
+{
+    r->first = NULL;
+    r->actual = NULL;
+    r->last = NULL;
+    r->clock_prio = 1;
+    r->rec = 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
