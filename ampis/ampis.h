@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <signal.h>
 
 /* DEFINES */
 #if DEBUG_FLAG==1
@@ -40,13 +41,12 @@ typedef struct {
     step_link_t* first;
     step_link_t* actual;
     step_link_t* last;
-    int clock_prio;
-    int rec;
 } ampis_recorder_t;
 
 /* GLOBAL VARIABLES */
 int sleeptime;
 int end;
+int rec;
 pthread_mutex_t mutex;
 
 /* FUNCTIONS */
@@ -55,10 +55,10 @@ void check_port(int *p);
 void setbpm (int bpm);
 
 /* recorder */
-step_link_t* record_link(char midi[3],
-                step_link_t* act, step_link_t* last);
+void record_link(char midi[3], ampis_recorder_t* last);
 void free_link(step_link_t* start);
 void init_recorder(ampis_recorder_t* r);
+int play_link(ampis_recorder_t* r, char *midi);
 
 /* main */
 void *snd_midi_clk_thread(void *arg);

@@ -52,26 +52,20 @@ void setbpm (int bpm)
 
 // ++ RECORDER ++
 
-step_link_t* record_link(char midi[3], step_link_t* act,
-                         step_link_t* last)
+void record_link(char midi[3], ampis_recorder_t* r)
 {
     struct timespec time;
-    step_link_t* next;
 
     clock_gettime(CLOCK_REALTIME, &time);
 
-    next = (step_link_t *)malloc(sizeof(step_link_t));
-    next->prev = act;
-    next->next = NULL;
+    r->actual->next = (step_link_t *)malloc(sizeof(step_link_t));
+    r->actual->next->prev = r->actual;
+    r->last = r->actual->next;
+    r->actual = r->actual->next;
+    r->actual->next = NULL;
 
-    next->t = time;
-    memcpy(next->midi, midi, 3);
-
-    act->next = next;
-    act = next;
-    last = next;
-
-    return act;
+    r->actual->t = time;
+    memcpy(r->actual->midi, midi, 3);
 }
 
 void free_link(step_link_t* start)
@@ -92,13 +86,40 @@ void free_link(step_link_t* start)
     }
 }
 
+int play_link(ampis_recorder_t* r, char *midi)
+{
+    memcpy(midi, r->actual->midi, 3);
+
+    if (r->actual == r->last)
+        r->actual = r->first;
+    else 
+        r->actual = r->actual->next;
+
+    if (r->actual == r->first)
+        return 0;
+
+    struct timespec temp;
+    if ((r->actual->t.tv_sec - r->actual->prev->t.tv_sec) < 0){
+        temp.tv_sec = (r->actual->t.tv_sec -
+                       r->actual->prev->t.tv_sec) - 1;
+    } else {
+        temp.tv_nsec = 1000000000 + (r->actual->t.tv_nsec -
+                       r->actual->prev->t.tv_nsec);
+    }
+    printf("S:%d - US: %d\n", temp.tv_sec, temp.tv_nsec);
+    int usec = (int)(temp.tv_nsec / 1000) + (temp.tv_sec * 1000);
+    printf("USEC:%d\n", usec);
+
+    return usec;
+}
+
 void init_recorder(ampis_recorder_t* r)
 {
-    r->first = NULL;
-    r->actual = NULL;
-    r->last = NULL;
-    r->clock_prio = 1;
-    r->rec = 0;
+    r->actual = (step_link_t *)malloc(sizeof(step_link_t));
+    r->first = r->actual;
+    r->last = r->actual;
+    r->actual->prev = NULL;
+    r->actual->next = NULL;
 }
 
 

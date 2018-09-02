@@ -1,4 +1,3 @@
-#include <signal.h>
 #include "ampis.h"
 
 void exit_handler(int dummy)
@@ -14,13 +13,11 @@ void *clk_thread(void *arg)
     snd_rawmidi_t** mfd = (snd_rawmidi_t **)arg;
     char midiclk[1] = {0xF8};
     int try = 0;
-    int i = 0;
 
 /* TODO: Option: Clk Thru */
 
 /* Option: Generator */
     while (end) {
-        i++;
         do {
             if (end == 0)
                 goto stopclk; 
@@ -33,9 +30,6 @@ void *clk_thread(void *arg)
             break;
         }
         pthread_mutex_unlock(&mutex);
-
-        if ((i % 96) == 0)
-            DEBUG("BAR %d\n", (i / 96));
 
         usleep(sleeptime);
     }
@@ -53,45 +47,66 @@ void *play_thread(void *arg)
     snd_rawmidi_t** mfd  = (snd_rawmidi_t **)arg;
     int try = 0;
 
-/* TODO: Option: recorder */
+    ampis_recorder_t recorder;
+    init_recorder(&recorder);
 
-/* Option: midi thru */
     while (end) {
-        //TODO: make nonblocking
-        if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
-            puts("Problem reading MIDI input");
-            break;
-        }
+        /* Option: recorder */
+        // ließ und speichere daten in liste
+        if (rec == 1) {
+            if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
+                puts("Problem reading MIDI input");
+                break;
+            }
+        
+            record_link(buffer, &recorder);
+                
+            if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+                puts("Problem writing MIDI output");
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
+        // spiele liste ab
+        } else if (rec == 2) {
+            usleep(play_link(&recorder, buffer));
+            
+            if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+                puts("Problem writing MIDI output");
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
+        /* Option: midi thru */
+        } else if (rec == 0) {
+            if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
+                puts("Problem reading MIDI input");
+                break;
+            }
 
-        /* the slider of music25 is set to 0xb0
-         * thus it can only interact with the program, not the rocket */
-        if ((buffer[0] == 0xb0) && (buffer[1] == 2)) {
-            setbpm(((int)buffer[2] * 2) + 46);
-            continue; /* dont send data to rocket */
-        }
+            /* the slider of music25 is set to 0xb0
+             * thus it can only interact with the program
+             * not the rocket */
+            if ((buffer[0] == 0xb0) && (buffer[1] == 2)) {
+                setbpm(((int)buffer[2] * 2) + 46);
+                continue; /* dont send data to rocket */
+            }
 
-        do {
-            if (end == 0)
-                goto stopthru;
-            try = pthread_mutex_trylock(&mutex);
-        } while (try == EBUSY);
+            do {
+                if (end == 0)
+                    goto stopthru;
+                try = pthread_mutex_trylock(&mutex);
+            } while (try == EBUSY);
 
-        if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
-            puts("Problem writing MIDI output");
+            if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+                puts("Problem writing MIDI output");
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
             pthread_mutex_unlock(&mutex);
-            break;
         }
-        pthread_mutex_unlock(&mutex);
     }
 
 stopthru:
     end = 0;
-    return NULL;
-}
-
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-void *record_thread(void *arg)
-{
     return NULL;
 }
 
@@ -102,7 +117,6 @@ int main(int argc, char *argv[])
     puts("=============\n");
 
     int ports[2];
-    end = 1;
     char portin[9];
     char portout[9];
     snd_rawmidi_t* midichan[2];
@@ -110,10 +124,14 @@ int main(int argc, char *argv[])
     midichan[1] = NULL;
     pthread_t midiclkthread;
     pthread_t playthread;
+    char readoption[20];
 
     /* ++ INITIALIZATION ++ */
     puts("initializing...");
-    signal(SIGINT, exit_handler);
+    //signal(SIGINT, exit_handler);
+
+    end = 1;
+    rec = 0;
 
     pthread_mutex_init(&mutex, NULL);
     setbpm(120);
@@ -147,7 +165,21 @@ int main(int argc, char *argv[])
 
     /* ++ MAIN LOOP ++ */
     puts("running...");
-    while (end) {};
+    while (end) {
+        if(rec == 1)
+            getc(stdin);
+            rec = 2;
+
+        puts("Reading...");
+        fgets(readoption, 19, stdin);
+
+        if (strstr(readoption, "rec") != NULL)
+            rec = 1;
+        else if (strstr(readoption, "play") != NULL)
+            rec = 2;
+        else
+            rec = 0;
+    };
 
     /* ++ DEINITIALIZATION ++ */
     puts("finalizing...");
