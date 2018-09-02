@@ -15,13 +15,24 @@
 #include <time.h>
 
 /* DEFINES */
+#if DEBUG_FLAG==1
 #define DEBUG(...) printf( __VA_ARGS__)
+#else
+#define DEBUG(...)
+#endif
 
 /* DATATYPES */
 typedef struct step_link {
     struct step_link* prev;
     struct step_link* next;
-    struct timespec t;    
+/* TODO:
+ * this struct is not fully decided yet
+ ****************************
+ * int step;            // stepnumber of a step sequencer (quantification)
+ ****************************/
+    struct timespec t;  // no quantification
+    int bpm;            // when bpm changes, t must be recalculated
+ /***************************/
     char midi[3];
 } step_link_t;
 

@@ -24,8 +24,14 @@ void check_port(int *p)
             sub_name = snd_rawmidi_info_get_subdevice_name(info);
 
             DEBUG("hw:%d,%d %s\n", card, device, sub_name);
-            if (strcmp("MIDISTART", sub_name)) p[0] = card;
-            if (strstr(sub_name, "Rocket") != NULL) p[1] = card;
+            if (strstr(sub_name, "MIDISTART") != NULL) {
+                printf("1. IF: %s,%d\n", sub_name, card);
+                p[0] = card;    
+            }
+            if (strstr(sub_name, "Rocket") != NULL){
+                printf("2. IF: %s,%d\n", sub_name, card);
+                p[1] = card;
+            }
 
             snd_ctl_rawmidi_next_device(ctl, &device);
         }

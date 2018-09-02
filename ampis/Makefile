@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -g
+CFLAGS=-Wall -g -DDEBUG_FLAG=1
 LDFLAGS=-lasound -pthread
 OBJ=ampis.c helper.c
 BIN=ampis
