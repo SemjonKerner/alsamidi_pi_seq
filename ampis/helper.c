@@ -1,8 +1,15 @@
 #include "ampis.h"
 
-// ++ HELPER ++
+/* ++ HELPER ++ */
 
-void check_port(int *p)
+void setbpm (int bpm) 
+{
+    sleeptime = (int)(2500000 / bpm);
+    DEBUG("BPM = %f, sleeping = %d\n",
+    (double)(2500000 / sleeptime), sleeptime);
+}
+
+int check_port(int *p)
 {
     int card = -1;
     int device = -1;
@@ -12,6 +19,9 @@ void check_port(int *p)
     snd_rawmidi_info_t *info;
 
     snd_card_next(&card);
+
+    p[0] = -1;
+    p[1] = -1;
 
     while (card >= 0) {
         sprintf(name, "hw:%d", card);
@@ -25,11 +35,9 @@ void check_port(int *p)
 
             DEBUG("hw:%d,%d %s\n", card, device, sub_name);
             if (strstr(sub_name, "MIDISTART") != NULL) {
-                printf("1. IF: %s,%d\n", sub_name, card);
                 p[0] = card;    
             }
             if (strstr(sub_name, "Rocket") != NULL){
-                printf("2. IF: %s,%d\n", sub_name, card);
                 p[1] = card;
             }
 
@@ -38,19 +46,46 @@ void check_port(int *p)
         snd_ctl_close(ctl);
         if (snd_card_next(&card) < 0) break;
     } 
+    
+    if (p[0] < 0)
+        return -1;
+    if (p[1] < 0)
+        return -2;
 
-    DEBUG("ports[0] = %d, ports[1] = %d\n", p[0], p[1]);
-    return;
+    DEBUG("Music25 port = %d, Rocket_port = %d\n", p[0], p[1]);
+    return 0;
 }
 
-void setbpm (int bpm) 
+int midi_ports_init(snd_rawmidi_t *midichan[2])
 {
-    sleeptime = (int)(2500000 / bpm);
-    DEBUG("BPM = %f, sleeping = %d\n",
-    (double)(2500000 / sleeptime), sleeptime);
+    int ports[2];
+    int status;
+    char portname[10];
+
+    midichan[0] = NULL;
+    midichan[1] = NULL;
+
+    if((status = check_port(ports)) < 0)
+        return status;
+
+    sprintf(portname, "hw:%d,0,0\n", (char)(ports[0] % 10));
+    if ((snd_rawmidi_open(&midichan[0], NULL, portname,
+        SND_RAWMIDI_SYNC)) < 0) {
+        puts("Problem opening MIDI input");
+        return -3;
+    }
+
+    sprintf(portname, "hw:%d,0,0\n", (char)(ports[1] % 10));
+    if (snd_rawmidi_open(NULL, &midichan[1], portname,
+        SND_RAWMIDI_SYNC) < 0) {
+        puts("Problem opening MIDI output");
+        return -4;
+    }
+
+    return 0;
 }
 
-// ++ RECORDER ++
+/* ++ RECORDER ++ */
 
 void record_link(char midi[3], ampis_recorder_t* r)
 {
@@ -98,7 +133,9 @@ int play_link(ampis_recorder_t* r, char *midi)
     if (r->actual == r->first)
         return 0;
 
+    //TODO fix wait time
     struct timespec temp;
+    /* Calculate difference between getclocks */
     if ((r->actual->t.tv_sec - r->actual->prev->t.tv_sec) < 0){
         temp.tv_sec = (r->actual->t.tv_sec -
                        r->actual->prev->t.tv_sec) - 1;
@@ -106,9 +143,10 @@ int play_link(ampis_recorder_t* r, char *midi)
         temp.tv_nsec = 1000000000 + (r->actual->t.tv_nsec -
                        r->actual->prev->t.tv_nsec);
     }
-    printf("S:%d - US: %d\n", temp.tv_sec, temp.tv_nsec);
+
+    DEBUG("S:%ld - US: %ld\n", (long)temp.tv_sec, temp.tv_nsec);
     int usec = (int)(temp.tv_nsec / 1000) + (temp.tv_sec * 1000);
-    printf("USEC:%d\n", usec);
+    DEBUG("Next Midi Signal in : %dusec\n", usec);
 
     return usec;
 }
@@ -122,14 +160,21 @@ void init_recorder(ampis_recorder_t* r)
     r->actual->next = NULL;
 }
 
+/* ++ INTERFACE ++ */
 
+int get_ampis_mode()
+{
+    char readoption[20];
 
+    puts("Reading...");
+    fgets(readoption, 19, stdin);
 
+    if (strstr(readoption, "rec") != NULL)
+            mode.rec = 1;
+    else if (strstr(readoption, "play") != NULL)
+            mode.rec = 2;
+    else
+            mode.rec = 0;
 
-
-
-
-
-
-
-
+    return 0;
+}

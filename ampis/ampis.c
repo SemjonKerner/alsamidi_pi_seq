@@ -1,48 +1,52 @@
 #include "ampis.h"
 
-void exit_handler(int dummy)
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+void *interface_thread(void *arg)
 {
-   end = 0;
+    return NULL;
 }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 void *clk_thread(void *arg)
 {
-/* this thread should either get a clk from midi
- * or generate its own clock */
     snd_rawmidi_t** mfd = (snd_rawmidi_t **)arg;
     char midiclk[1] = {0xF8};
     int try = 0;
 
-/* TODO: Option: Clk Thru */
-
-/* Option: Generator */
-    while (end) {
-        do {
-            if (end == 0)
-                goto stopclk; 
-            try = pthread_mutex_trylock(&mutex);
-        } while (try == EBUSY);
-        
-        if (snd_rawmidi_write(mfd[1], midiclk, 1) < 0) {
-            puts("Problem writing MIDI output");
+    while (mode.run) {
+    /* Option: Clk Thru */
+        if (mode.clock == 1) {
+        // Initialisiere Midi Eingang (GPIO)
+        // stoppe internes bpm setzen
+        // errechne bpm von extern und setze es, wenn es sich ändert
+        //
+            ;
+    /* Option: Clk Generator */
+        } else {
+            do {
+                if (mode.run == 0)
+                    goto stopclk; 
+                try = pthread_mutex_trylock(&mutex);
+            } while (try == EBUSY);
+            
+            if (snd_rawmidi_write(mfd[1], midiclk, 1) < 0) {
+                puts("Problem writing MIDI output");
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
             pthread_mutex_unlock(&mutex);
-            break;
-        }
-        pthread_mutex_unlock(&mutex);
 
-        usleep(sleeptime);
+            usleep(sleeptime);
+        }
     }
 stopclk:
-    end = 0;
+    mode.run = 0;
     return NULL;
 }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 void *play_thread(void *arg)
 {
-/* this thread either plays a recording
- * or passes midi signals thru */
     char buffer[3];
     snd_rawmidi_t** mfd  = (snd_rawmidi_t **)arg;
     int try = 0;
@@ -50,10 +54,21 @@ void *play_thread(void *arg)
     ampis_recorder_t recorder;
     init_recorder(&recorder);
 
-    while (end) {
-        /* Option: recorder */
-        // ließ und speichere daten in liste
-        if (rec == 1) {
+    while (mode.run) {
+
+    /* Option: recorder */
+        if (mode.rec == 1) {
+            // INITIALISIERUNG
+            // maximale Steps, Stepweite (8, 16, 32)
+            // Startzeitpunkt
+            //
+            // HAUPTSCHLEIFE bis max Steps + (Step_timelength - 1)
+            // Midi aufnehmen, Zeitpunkt speichern
+            // Quantisierung zu nächstem Step (Vor- oder Rückquantisiert)
+            //
+            // ENDE
+            // ?? sortiere Liste (Steps mit mehreren notes: note off zuerst)
+            // gehe in Playmode
             if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
                 puts("Problem reading MIDI input");
                 break;
@@ -66,8 +81,8 @@ void *play_thread(void *arg)
                 pthread_mutex_unlock(&mutex);
                 break;
             }
-        // spiele liste ab
-        } else if (rec == 2) {
+        // PLAYMODE spiele liste ab 
+        } else if (mode.rec == 2) {
             usleep(play_link(&recorder, buffer));
             
             if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
@@ -75,8 +90,9 @@ void *play_thread(void *arg)
                 pthread_mutex_unlock(&mutex);
                 break;
             }
-        /* Option: midi thru */
-        } else if (rec == 0) {
+
+    /* Option: midi thru */
+        } else if (mode.rec == 0) {
             if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
                 puts("Problem reading MIDI input");
                 break;
@@ -91,7 +107,7 @@ void *play_thread(void *arg)
             }
 
             do {
-                if (end == 0)
+                if (mode.run == 0)
                     goto stopthru;
                 try = pthread_mutex_trylock(&mutex);
             } while (try == EBUSY);
@@ -106,84 +122,55 @@ void *play_thread(void *arg)
     }
 
 stopthru:
-    end = 0;
+    mode.run = 0;
     return NULL;
 }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 int main(int argc, char *argv[])
 {
     puts("This is ampis");
     puts("=============\n");
 
-    int ports[2];
-    char portin[9];
-    char portout[9];
     snd_rawmidi_t* midichan[2];
-    midichan[0] = NULL;
-    midichan[1] = NULL;
     pthread_t midiclkthread;
     pthread_t playthread;
-    char readoption[20];
+//    /pthread_t interfacethread;
 
     /* ++ INITIALIZATION ++ */
     puts("initializing...");
-    //signal(SIGINT, exit_handler);
-
-    end = 1;
-    rec = 0;
-
-    pthread_mutex_init(&mutex, NULL);
+    mode.run = 1;
+    mode.rec = 0;
     setbpm(120);
-    check_port(ports);
 
-    sprintf(portin, "hw:%d,0,0\n", ports[0]);
-    if ((snd_rawmidi_open(&midichan[0], NULL, portin,  
-        SND_RAWMIDI_SYNC)) < 0) {
-        puts("Problem opening MIDI input");
+    if (pthread_mutex_init(&mutex, NULL) != 0)
         exit(1);
-    }
-
-    sprintf(portout, "hw:%d,0,0\n", ports[1]);
-    if (snd_rawmidi_open(NULL, &midichan[1], portout,
-        SND_RAWMIDI_SYNC) < 0) {
-        puts("Problem opening MIDI output");
+    if (midi_ports_init(midichan) < 0)
         exit(1);
-    }
-
-    if (pthread_create(&midiclkthread, NULL,
-        clk_thread, midichan) < 0) {
+    if (pthread_create(&midiclkthread, NULL, clk_thread, midichan) < 0) {
         puts("Problem starting clk thread");
         exit(1);
     }
-
-    if (pthread_create(&playthread, NULL,
-        play_thread, midichan) < 0) {
+    if (pthread_create(&playthread, NULL, play_thread, midichan) < 0) {
         puts("Problem starting play thread");
         exit(1);
     }
+//    if (pthread_create(&interfacethread, NULL, interface_thread, midichan) < 0) {
+//        puts("Problem starting play thread");
+//        exit(1);
+//    }
 
     /* ++ MAIN LOOP ++ */
     puts("running...");
-    while (end) {
-        if(rec == 1)
-            getc(stdin);
-            rec = 2;
-
-        puts("Reading...");
-        fgets(readoption, 19, stdin);
-
-        if (strstr(readoption, "rec") != NULL)
-            rec = 1;
-        else if (strstr(readoption, "play") != NULL)
-            rec = 2;
-        else
-            rec = 0;
+    while (mode.run) {
+        if (get_ampis_mode() < 0)
+            break;
     };
 
     /* ++ DEINITIALIZATION ++ */
     puts("finalizing...");
-    end = 0;
+    mode.run = 0;
 
     pthread_join(midiclkthread, NULL);
     pthread_join(playthread, NULL);
