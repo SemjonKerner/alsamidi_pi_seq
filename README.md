@@ -15,14 +15,15 @@ Setup and building Tutorial will be published when the code base is done.
 ## next steps
 
 ### code base
-* recording patterns is about to be finished, quantisation needs a bit more overthinking
-* using gpio inputs to connect a midi device (and perhaps even registering it with alsa)
-* building, testing, debugging gpio/i2c interface
+- [ ] recording patterns is about to be finished
+- [ ] quantisation needs a bit more overthinking
+- [ ] using gpio inputs to connect a midi device (and perhaps even registering it with alsa)
+- [ ] building, testing, debugging gpio/i2c interface
 
 ### future work
-* writing a coherent tutorial for interested people
-* messing around with patterns (timey wimey stuff and also harmonic stuff)
-* modularity
-  * different sequencer versions
-  * perhaps a library
-* migration to either a cheaper plattform or a newer raspi model
+- [ ] writing a coherent tutorial for interested people
+- [ ] messing around with patterns (timey wimey stuff and also harmonic stuff)
+- [ ] modularity
+  - [ ] different sequencer versions
+  - [ ] perhaps a library
+- [ ] migration to either a cheaper plattform or a newer raspi model
