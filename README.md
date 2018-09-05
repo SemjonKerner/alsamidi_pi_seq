@@ -8,9 +8,9 @@ Setup and building Tutorial will be published when the code base is done.
 
 ## current status
 
-* midi devices are hardcoded
-* midi clock is created internally, but the bpm may be changed by a midi controller
-* midi signals are passed thru to a synth
+- [X] midi devices are hardcoded
+- [X] midi clock is created internally, but the bpm may be changed by a midi controller
+- [X] midi signals are passed thru to a synth
 
 ## next steps
 
