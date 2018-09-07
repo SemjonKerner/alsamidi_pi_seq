@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <math.h>
 #include <signal.h>
 
 /* DEFINES */
@@ -53,20 +54,21 @@ typedef struct {
 
 /* GLOBAL VARIABLES */
 int sleeptime;
+int bpm;
 ampis_mode_t mode;
 pthread_mutex_t mutex;
 
 /* FUNCTIONS */
 /* helper */
-void setbpm (int bpm);
+void setbpm(int bpm);
 int check_port(int *p);
 int midi_ports_init(snd_rawmidi_t *midichan[2]);
 
 /* recorder */
 void record_link(char midi[3], ampis_recorder_t* r);
-void free_link(step_link_t* start);
 void init_recorder(ampis_recorder_t* r);
 int play_link(ampis_recorder_t* r, char *midi);
+void quantize(step_link_t *act, struct timespec *start, int steps);
 
 /* interface */
 int get_ampis_mode();

@@ -1,12 +1,6 @@
 #include "ampis.h"
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-void *interface_thread(void *arg)
-{
-    return NULL;
-}
-
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 void *clk_thread(void *arg)
 {
     snd_rawmidi_t** mfd = (snd_rawmidi_t **)arg;
@@ -19,18 +13,17 @@ void *clk_thread(void *arg)
         // Initialisiere Midi Eingang (GPIO)
         // stoppe internes bpm setzen
         // errechne bpm von extern und setze es, wenn es sich ändert
-        //
             ;
     /* Option: Clk Generator */
         } else {
             do {
                 if (mode.run == 0)
-                    goto stopclk; 
+                    goto stopclk;
                 try = pthread_mutex_trylock(&mutex);
             } while (try == EBUSY);
-            
+
             if (snd_rawmidi_write(mfd[1], midiclk, 1) < 0) {
-                puts("Problem writing MIDI output");
+                DEBUG("Problem writing MIDI output\n");
                 pthread_mutex_unlock(&mutex);
                 break;
             }
@@ -45,6 +38,18 @@ stopclk:
 }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+void *rwdg_thread(void *arg)
+{
+    //TODO:
+    /* sleeptime is 1/96th of a bar */
+    int t = sleeptime * 96 * *(int *)arg;
+
+    printf("T: %d, ST: %d, A: %d\n", t, sleeptime, *(int *)arg);
+    usleep(t);
+    mode.rec = 2;
+    return NULL;
+}
+
 void *play_thread(void *arg)
 {
     char buffer[3];
@@ -59,43 +64,57 @@ void *play_thread(void *arg)
     /* Option: recorder */
         if (mode.rec == 1) {
             // INITIALISIERUNG
-            // maximale Steps, Stepweite (8, 16, 32)
-            // Startzeitpunkt
-            //
-            // HAUPTSCHLEIFE bis max Steps + (Step_timelength - 1)
-            // Midi aufnehmen, Zeitpunkt speichern
-            // Quantisierung zu nächstem Step (Vor- oder Rückquantisiert)
-            //
-            // ENDE
-            // ?? sortiere Liste (Steps mit mehreren notes: note off zuerst)
-            // gehe in Playmode
-            if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
-                puts("Problem reading MIDI input");
-                break;
+            struct timespec start;
+            recorder.steps = 32;
+            clock_gettime(CLOCK_REALTIME, &start);
+
+            pthread_t rwdg;
+            if (pthread_create(&rwdg, NULL, rwdg_thread,
+                &recorder.steps) < 0) {
+                    DEBUG("Problem starting clk thread\n");
+                    goto stopthru;
             }
-        
-            record_link(buffer, &recorder);
-                
-            if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
-                puts("Problem writing MIDI output");
-                pthread_mutex_unlock(&mutex);
-                break;
-            }
-        // PLAYMODE spiele liste ab 
-        } else if (mode.rec == 2) {
+
+            // HAUPTSCHLEIFE
+            do {
+                if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
+                    DEBUG("Problem reading MIDI input\n");
+                    goto stopthru;
+                }
+
+                record_link(buffer, &recorder);
+
+                if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+                    DEBUG("Problem writing MIDI output\n");
+                    pthread_mutex_unlock(&mutex);
+                    goto stopthru;
+                }
+
+                quantize(recorder.actual, &start, recorder.steps);
+
+            } while (mode.rec == 1);
+
+            recorder.last = recorder.actual->prev;
+            free(recorder.actual);
+            recorder.actual = recorder.first;
+            DEBUG("Replay\n");
+            mode.rec = 3;
+
+        // PLAYMODE spiele liste ab
+        } else if (mode.rec == 3) {
             usleep(play_link(&recorder, buffer));
-            
+
             if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
-                puts("Problem writing MIDI output");
+                DEBUG("Problem writing MIDI output\n");
                 pthread_mutex_unlock(&mutex);
-                break;
+                goto stopthru;
             }
 
     /* Option: midi thru */
         } else if (mode.rec == 0) {
             if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
-                puts("Problem reading MIDI input");
-                break;
+                DEBUG("Problem reading MIDI input\n");
+                goto stopthru;
             }
 
             /* the slider of music25 is set to 0xb0
@@ -113,9 +132,9 @@ void *play_thread(void *arg)
             } while (try == EBUSY);
 
             if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
-                puts("Problem writing MIDI output");
+                DEBUG("Problem writing MIDI output\n");
                 pthread_mutex_unlock(&mutex);
-                break;
+                goto stopthru;
             }
             pthread_mutex_unlock(&mutex);
         }
@@ -130,16 +149,15 @@ stopthru:
 
 int main(int argc, char *argv[])
 {
-    puts("This is ampis");
-    puts("=============\n");
+    DEBUG("This is ampis\n");
+    DEBUG("=============\n\n");
 
     snd_rawmidi_t* midichan[2];
     pthread_t midiclkthread;
     pthread_t playthread;
-//    /pthread_t interfacethread;
 
     /* ++ INITIALIZATION ++ */
-    puts("initializing...");
+    DEBUG("initializing...\n");
     mode.run = 1;
     mode.rec = 0;
     setbpm(120);
@@ -149,27 +167,23 @@ int main(int argc, char *argv[])
     if (midi_ports_init(midichan) < 0)
         exit(1);
     if (pthread_create(&midiclkthread, NULL, clk_thread, midichan) < 0) {
-        puts("Problem starting clk thread");
+        DEBUG("Problem starting clk thread\n");
         exit(1);
     }
     if (pthread_create(&playthread, NULL, play_thread, midichan) < 0) {
-        puts("Problem starting play thread");
+        DEBUG("Problem starting play thread\n");
         exit(1);
     }
-//    if (pthread_create(&interfacethread, NULL, interface_thread, midichan) < 0) {
-//        puts("Problem starting play thread");
-//        exit(1);
-//    }
 
     /* ++ MAIN LOOP ++ */
-    puts("running...");
+    DEBUG("running...\n");
     while (mode.run) {
         if (get_ampis_mode() < 0)
             break;
     };
 
-    /* ++ DEINITIALIZATION ++ */
-    puts("finalizing...");
+    /* ++ CLEANUP ++ */
+    DEBUG("finalizing...\n");
     mode.run = 0;
 
     pthread_join(midiclkthread, NULL);
@@ -181,8 +195,8 @@ int main(int argc, char *argv[])
     midichan[0] = NULL;
     midichan[1] = NULL;
 
-    puts("\n=============");
-    puts("  Good  Bye  ");
+    DEBUG("\n=============\n");
+    DEBUG("  Good  Bye  \n");
 
     return 0;
 }

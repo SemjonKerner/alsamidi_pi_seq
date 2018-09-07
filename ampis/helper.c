@@ -2,9 +2,10 @@
 
 /* ++ HELPER ++ */
 
-void setbpm (int bpm) 
+void setbpm (int b) 
 {
-    sleeptime = (int)(2500000 / bpm);
+    sleeptime = (int)(2500000 / b);
+    bpm = b;
     DEBUG("BPM = %f, sleeping = %d\n",
     (double)(2500000 / sleeptime), sleeptime);
 }
@@ -71,14 +72,14 @@ int midi_ports_init(snd_rawmidi_t *midichan[2])
     sprintf(portname, "hw:%d,0,0\n", (char)(ports[0] % 10));
     if ((snd_rawmidi_open(&midichan[0], NULL, portname,
         SND_RAWMIDI_SYNC)) < 0) {
-        puts("Problem opening MIDI input");
+        DEBUG("Problem opening MIDI input\n");
         return -3;
     }
 
     sprintf(portname, "hw:%d,0,0\n", (char)(ports[1] % 10));
     if (snd_rawmidi_open(NULL, &midichan[1], portname,
         SND_RAWMIDI_SYNC) < 0) {
-        puts("Problem opening MIDI output");
+        DEBUG("Problem opening MIDI output\n");
         return -4;
     }
 
@@ -86,6 +87,33 @@ int midi_ports_init(snd_rawmidi_t *midichan[2])
 }
 
 /* ++ RECORDER ++ */
+
+//TODO:
+void quantize(step_link_t *act, struct timespec *start, int steps)
+{
+    struct timespec temp;
+
+    /* Calculate difference between timespecs */
+    if ((act->t.tv_nsec - start->tv_nsec) < 0) {
+        temp.tv_sec = (act->t.tv_sec - start->tv_sec) - 1;
+        temp.tv_nsec = 1000000000 + (act->t.tv_nsec - start->tv_nsec);
+
+    } else {
+        temp.tv_sec = act->t.tv_sec - start->tv_sec;
+        temp.tv_nsec = act->t.tv_nsec - start->tv_nsec;
+    }
+
+    printf("Start:  %ld.%06ld\n", start->tv_sec, start->tv_nsec);
+    printf("Actual: %ld.%06ld\n", act->t.tv_sec, act->t.tv_nsec);
+    printf("Diff:   %ld.%06ld\n", temp.tv_sec, temp.tv_nsec);
+
+    unsigned long nsec = (unsigned long)(temp.tv_nsec)
+                         + (unsigned long)(temp.tv_sec * 1000000000);
+    act->step = round((nsec / 1000000000) / (float)(bpm / 60));
+    printf("n: %ld, n/1000: %ld\n", nsec, nsec /1000000000);
+
+    printf("nSEC: %ld, Step: %d\n", nsec, act->step);
+}
 
 void record_link(char midi[3], ampis_recorder_t* r)
 {
@@ -103,52 +131,28 @@ void record_link(char midi[3], ampis_recorder_t* r)
     memcpy(r->actual->midi, midi, 3);
 }
 
-void free_link(step_link_t* start)
-{
-    step_link_t *act, *next;
-    act = start;
-
-    while(1) {
-        DEBUG("%lf: 0x%c, %c, %c\n",
-        (double)act->t.tv_sec +
-        (double)act->t.tv_nsec / 1000000000,
-        act->midi[0], act->midi[1], act->midi[2]);
-
-        next = act->next;
-        free(act);
-        act = next;
-        if (act == NULL) break;
-    }
-}
-
 int play_link(ampis_recorder_t* r, char *midi)
 {
     memcpy(midi, r->actual->midi, 3);
+
+    if (r->actual == r->first){
+        r->actual = r->actual->next;
+        return 0;
+    }
+
+    int ret;
+
+    if (r->actual->step == r->actual->prev->step)
+        ret = 0;
+    else
+        ret = ((r->actual->step / (bpm / 60)) * 1000000);
 
     if (r->actual == r->last)
         r->actual = r->first;
     else 
         r->actual = r->actual->next;
 
-    if (r->actual == r->first)
-        return 0;
-
-    //TODO fix wait time
-    struct timespec temp;
-    /* Calculate difference between getclocks */
-    if ((r->actual->t.tv_sec - r->actual->prev->t.tv_sec) < 0){
-        temp.tv_sec = (r->actual->t.tv_sec -
-                       r->actual->prev->t.tv_sec) - 1;
-    } else {
-        temp.tv_nsec = 1000000000 + (r->actual->t.tv_nsec -
-                       r->actual->prev->t.tv_nsec);
-    }
-
-    DEBUG("S:%ld - US: %ld\n", (long)temp.tv_sec, temp.tv_nsec);
-    int usec = (int)(temp.tv_nsec / 1000) + (temp.tv_sec * 1000);
-    DEBUG("Next Midi Signal in : %dusec\n", usec);
-
-    return usec;
+    return ret;
 }
 
 void init_recorder(ampis_recorder_t* r)
@@ -166,7 +170,7 @@ int get_ampis_mode()
 {
     char readoption[20];
 
-    puts("Reading...");
+    DEBUG("Reading...\n");
     fgets(readoption, 19, stdin);
 
     if (strstr(readoption, "rec") != NULL)
