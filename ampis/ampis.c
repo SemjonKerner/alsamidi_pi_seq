@@ -40,7 +40,6 @@ stopclk:
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 void *rwdg_thread(void *arg)
 {
-    //TODO:
     /* sleeptime is 1/96th of a bar */
     int t = sleeptime * 96 * *(int *)arg;
 
@@ -55,6 +54,7 @@ void *play_thread(void *arg)
     char buffer[3];
     snd_rawmidi_t** mfd  = (snd_rawmidi_t **)arg;
     int try = 0;
+    int readbytes;
 
     ampis_recorder_t recorder;
     init_recorder(&recorder);
@@ -65,7 +65,7 @@ void *play_thread(void *arg)
         if (mode.rec == 1) {
             // INITIALISIERUNG
             struct timespec start;
-            recorder.steps = 32;
+            recorder.steps = 16;
             clock_gettime(CLOCK_REALTIME, &start);
 
             pthread_t rwdg;
@@ -77,14 +77,17 @@ void *play_thread(void *arg)
 
             // HAUPTSCHLEIFE
             do {
-                if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
-                    DEBUG("Problem reading MIDI input\n");
+                if ((readbytes = read_midi(mfd[0], buffer)) < 0) {
                     goto stopthru;
                 }
 
+                /* got nothing from midi in */
+                if (readbytes == 0)
+                    continue;
+
                 record_link(buffer, &recorder);
 
-                if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+                if (snd_rawmidi_write(mfd[1], buffer, readbytes) < 0) {
                     DEBUG("Problem writing MIDI output\n");
                     pthread_mutex_unlock(&mutex);
                     goto stopthru;
@@ -112,10 +115,13 @@ void *play_thread(void *arg)
 
     /* Option: midi thru */
         } else if (mode.rec == 0) {
-            if (snd_rawmidi_read(mfd[0], buffer, 3) < 0) {
-                DEBUG("Problem reading MIDI input\n");
+            if ((readbytes = read_midi(mfd[0], buffer)) < 0) {
                 goto stopthru;
             }
+
+            /* got nothing from midi in */
+            if (readbytes == 0)
+                continue;
 
             /* the slider of music25 is set to 0xb0
              * thus it can only interact with the program
@@ -131,7 +137,7 @@ void *play_thread(void *arg)
                 try = pthread_mutex_trylock(&mutex);
             } while (try == EBUSY);
 
-            if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {
+            if (snd_rawmidi_write(mfd[1], buffer, readbytes) < 0) {
                 DEBUG("Problem writing MIDI output\n");
                 pthread_mutex_unlock(&mutex);
                 goto stopthru;

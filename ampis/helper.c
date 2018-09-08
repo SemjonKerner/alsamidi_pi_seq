@@ -2,6 +2,23 @@
 
 /* ++ HELPER ++ */
 
+int read_midi(snd_rawmidi_t *in, char buf[3])
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        int e = snd_rawmidi_read(in, &buf[i], 1);
+        if (e == -EAGAIN)
+            /* print byte count without incrementing*/
+            break;
+        if (e == -EBUSY || e < 0) {
+            /* serious error */
+            DEBUG("Problem reading MIDI input\n");
+            return -1;
+        }
+    }
+    return i;
+}
+
 void setbpm (int b) 
 {
     sleeptime = (int)(2500000 / b);
@@ -71,7 +88,7 @@ int midi_ports_init(snd_rawmidi_t *midichan[2])
 
     sprintf(portname, "hw:%d,0,0\n", (char)(ports[0] % 10));
     if ((snd_rawmidi_open(&midichan[0], NULL, portname,
-        SND_RAWMIDI_SYNC)) < 0) {
+        SND_RAWMIDI_NONBLOCK)) < 0) {
         DEBUG("Problem opening MIDI input\n");
         return -3;
     }
@@ -88,7 +105,6 @@ int midi_ports_init(snd_rawmidi_t *midichan[2])
 
 /* ++ RECORDER ++ */
 
-//TODO:
 void quantize(step_link_t *act, struct timespec *start, int steps)
 {
     struct timespec temp;
@@ -103,16 +119,9 @@ void quantize(step_link_t *act, struct timespec *start, int steps)
         temp.tv_nsec = act->t.tv_nsec - start->tv_nsec;
     }
 
-    printf("Start:  %ld.%06ld\n", start->tv_sec, start->tv_nsec);
-    printf("Actual: %ld.%06ld\n", act->t.tv_sec, act->t.tv_nsec);
-    printf("Diff:   %ld.%06ld\n", temp.tv_sec, temp.tv_nsec);
-
-    unsigned long nsec = (unsigned long)(temp.tv_nsec)
-                         + (unsigned long)(temp.tv_sec * 1000000000);
-    act->step = round((nsec / 1000000000) / (float)(bpm / 60));
-    printf("n: %ld, n/1000: %ld\n", nsec, nsec /1000000000);
-
-    printf("nSEC: %ld, Step: %d\n", nsec, act->step);
+    float s = (float)temp.tv_sec + ((float)temp.tv_nsec / 1000000000);
+    act->step = round(s / (((float)bpm / 60) / 32));
+    DEBUG("Step #%d at %f s\n", act->step, s);
 }
 
 void record_link(char midi[3], ampis_recorder_t* r)
@@ -131,6 +140,7 @@ void record_link(char midi[3], ampis_recorder_t* r)
     memcpy(r->actual->midi, midi, 3);
 }
 
+//TODO:
 int play_link(ampis_recorder_t* r, char *midi)
 {
     memcpy(midi, r->actual->midi, 3);
@@ -145,7 +155,7 @@ int play_link(ampis_recorder_t* r, char *midi)
     if (r->actual->step == r->actual->prev->step)
         ret = 0;
     else
-        ret = ((r->actual->step / (bpm / 60)) * 1000000);
+        ret = ((r->actual->step / (((float)bpm / 60) / 32)) * 1000000);
 
     if (r->actual == r->last)
         r->actual = r->first;

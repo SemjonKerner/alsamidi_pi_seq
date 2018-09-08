@@ -60,6 +60,7 @@ pthread_mutex_t mutex;
 
 /* FUNCTIONS */
 /* helper */
+int read_midi(snd_rawmidi_t *in, char buf[3]);
 void setbpm(int bpm);
 int check_port(int *p);
 int midi_ports_init(snd_rawmidi_t *midichan[2]);
