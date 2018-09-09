@@ -105,6 +105,8 @@ void *play_thread(void *arg)
 
         // PLAYMODE spiele liste ab
         } else if (mode.rec == 3) {
+            /* hard wait untill next bar */
+
             usleep(play_link(&recorder, buffer));
 
             if (snd_rawmidi_write(mfd[1], buffer, 3) < 0) {

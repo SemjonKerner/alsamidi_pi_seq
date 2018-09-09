@@ -50,6 +50,7 @@ typedef struct {
     int run;                // Indicates programm run mode
     int rec;                // Controlls play_thread Mode
     int clock;              // Controlls clock_thread Mode
+    int bar;
 } ampis_mode_t;
 
 /* GLOBAL VARIABLES */

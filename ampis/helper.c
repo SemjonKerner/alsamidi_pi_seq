@@ -120,7 +120,7 @@ void quantize(step_link_t *act, struct timespec *start, int steps)
     }
 
     float s = (float)temp.tv_sec + ((float)temp.tv_nsec / 1000000000);
-    act->step = round(s / (((float)bpm / 60) / 32));
+    act->step = round(s / (((float)bpm / 60) / 16));
     DEBUG("Step #%d at %f s\n", act->step, s);
 }
 
@@ -150,17 +150,20 @@ int play_link(ampis_recorder_t* r, char *midi)
         return 0;
     }
 
-    int ret;
+    int ret = 0;
 
     if (r->actual->step == r->actual->prev->step)
         ret = 0;
     else
-        ret = ((r->actual->step / (((float)bpm / 60) / 32)) * 1000000);
+        ret = (((float)(r->actual->step - r->actual->prev->step) *
+              (((float)bpm / 60) / 16)) * 1000000);
 
     if (r->actual == r->last)
         r->actual = r->first;
     else 
         r->actual = r->actual->next;
+
+    printf("Step #%d in %d ns\n", r->actual->step, ret);
 
     return ret;
 }
