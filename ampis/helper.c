@@ -121,7 +121,7 @@ void quantize(step_link_t *act, struct timespec *start, int steps)
 
     float s = (float)temp.tv_sec + ((float)temp.tv_nsec / 1000000000);
     act->step = round(s / (((float)bpm / 60) / 16));
-    DEBUG("Step #%d at %f s\n", act->step, s);
+    DEBUG("Step #%d at %f s, note 0x%x%x%x\n", act->step, s, act->midi[0], act->midi[1], act->midi[2]);
 }
 
 void record_link(char midi[3], ampis_recorder_t* r)
@@ -163,8 +163,8 @@ int play_link(ampis_recorder_t* r, char *midi)
     else 
         r->actual = r->actual->next;
 
-    printf("Step #%d in %d ns\n", r->actual->step, ret);
-
+    printf("Step #%d in %d ns, note 0x%x%x%x\n", r->actual->step, ret, r->actual->midi[0],
+                                                 r->actual->midi[1], r->actual->midi[2]);
     return ret;
 }
 
@@ -190,8 +190,24 @@ int get_ampis_mode()
             mode.rec = 1;
     else if (strstr(readoption, "play") != NULL)
             mode.rec = 2;
-    else
+    else if (strstr(readoption, "thru") != NULL)
             mode.rec = 0;
+    else if (strstr(readoption, "internal") != NULL)
+            mode.clock = 0;
+    else if (strstr(readoption, "external") != NULL)
+            mode.clock = 1;
+    else if (strstr(readoption, "bar4") != NULL)
+            mode.bar = 4;
+    else if (strstr(readoption, "bar8") != NULL)
+            mode.bar = 8;
+    else if (strstr(readoption, "bar16") != NULL)
+            mode.bar = 16;
+    else if (strstr(readoption, "bar32") != NULL)
+            mode.bar = 32;
+    else if (strstr(readoption, "exit") != NULL)
+            mode.run = 0;
+    else if (strstr(readoption, "q") != NULL)
+            mode.run = 0;
 
     return 0;
 }

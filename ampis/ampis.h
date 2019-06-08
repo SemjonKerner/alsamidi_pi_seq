@@ -31,19 +31,19 @@ typedef struct {
 } gpio_interface_t;
 
 typedef struct step_link {
-    struct step_link* prev;
-    struct step_link* next;
     int step;               // stepnumber of a step sequencer (quantification)
     struct timespec t;      // no quantification
+    char midi[3];           // midi note
     //int bpm;              // when bpm changes, t must be recalculated
-    char midi[3];
+    struct step_link* prev;
+    struct step_link* next;
 } step_link_t;
 
 typedef struct {
+    int steps;
     step_link_t* first;
     step_link_t* actual;
     step_link_t* last;
-    int steps;
 } ampis_recorder_t;
 
 typedef struct {

@@ -38,6 +38,8 @@ stopclk:
 }
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+/*  this thread will wait until a full recording cycle of arg-many bars is over
+    and then switch to play mode */
 void *rwdg_thread(void *arg)
 {
     /* sleeptime is 1/96th of a bar */
@@ -51,10 +53,12 @@ void *rwdg_thread(void *arg)
 
 void *play_thread(void *arg)
 {
+
     char buffer[3];
     snd_rawmidi_t** mfd  = (snd_rawmidi_t **)arg;
     int try = 0;
     int readbytes;
+    int recstart = 0;
 
     ampis_recorder_t recorder;
     init_recorder(&recorder);
@@ -65,15 +69,9 @@ void *play_thread(void *arg)
         if (mode.rec == 1) {
             // INITIALISIERUNG
             struct timespec start;
-            recorder.steps = 16;
+            recorder.steps = mode.bar;
             clock_gettime(CLOCK_REALTIME, &start);
-
-            pthread_t rwdg;
-            if (pthread_create(&rwdg, NULL, rwdg_thread,
-                &recorder.steps) < 0) {
-                    DEBUG("Problem starting clk thread\n");
-                    goto stopthru;
-            }
+            recstart = 0;
 
             // HAUPTSCHLEIFE
             do {
@@ -82,8 +80,20 @@ void *play_thread(void *arg)
                 }
 
                 /* got nothing from midi in */
-                if (readbytes == 0)
+                if (readbytes == 0) {
                     continue;
+                }
+
+                /* wait for first key stroke to start recording*/
+                if (recstart == 0) {
+                    recstart = 1;
+                    pthread_t rwdg;
+                    if (pthread_create(&rwdg, NULL, rwdg_thread,
+                        &recorder.steps) < 0) {
+                        DEBUG("Problem starting clk thread\n");
+                        goto stopthru;
+                    }
+                }
 
                 record_link(buffer, &recorder);
 
@@ -97,11 +107,27 @@ void *play_thread(void *arg)
 
             } while (mode.rec == 1);
 
+            // end open note
+            if ((buffer[0] >> 1) & 0x9) {
+                printf("BUFFER : 0x%x%x%x\n", buffer[0], buffer[1], buffer[1]);
+                buffer[0] = (buffer[0] & 0x8);
+                record_link(buffer, &recorder);
+                if (snd_rawmidi_write(mfd[1], buffer, readbytes) < 0) {
+                    DEBUG("Problem writing MIDI output\n");
+                    pthread_mutex_unlock(&mutex);
+                    goto stopthru;
+                }
+                quantize(recorder.actual, &start, recorder.steps);
+            }
+
+            // cleanup recording
             recorder.last = recorder.actual->prev;
             free(recorder.actual);
             recorder.actual = recorder.first;
             DEBUG("Replay\n");
             mode.rec = 3;
+            
+            // TODO: Liste ausgeben
 
         // PLAYMODE spiele liste ab
         } else if (mode.rec == 3) {
@@ -166,14 +192,21 @@ int main(int argc, char *argv[])
 
     /* ++ INITIALIZATION ++ */
     DEBUG("initializing...\n");
+
+    mode.clock = 0;
     mode.run = 1;
     mode.rec = 0;
+    mode.bar = 4;
     setbpm(120);
 
-    if (pthread_mutex_init(&mutex, NULL) != 0)
+    if (pthread_mutex_init(&mutex, NULL) != 0){
+        DEBUG("Problem initializing mutex\n");
         exit(1);
-    if (midi_ports_init(midichan) < 0)
+    }
+    if (midi_ports_init(midichan) < 0){
+        DEBUG("Problem initializing midi ports\n");
         exit(1);
+    }
     if (pthread_create(&midiclkthread, NULL, clk_thread, midichan) < 0) {
         DEBUG("Problem starting clk thread\n");
         exit(1);
